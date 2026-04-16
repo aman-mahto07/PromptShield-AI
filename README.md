@@ -5,19 +5,19 @@ A comprehensive machine learning classification system with ensemble methods and
 ## Project Structure
 
 ```
-├── app/
-│   └── main.py              # Main application entry point
+├── api/
+│   └── main.py              
 ├── models/
-│   └── classifier.pkl       # Pre-trained classification model
+│   └── classifier.pkl       
 ├── src/
-│   ├── embedding.py        # Text/data embedding module
-│   ├── classifier.py       # Model inference and predictions
-│   ├── rules.py            # Rule-based classification engine
-│   ├── fusion.py           # Ensemble fusion for combining predictions
-│   └── explain.py          # Explainability and interpretability
+│   ├── embedding.py        
+│   ├── classifier.py      
+│   ├── rules.py            
+│   ├── fusion.py           
+│   └── explain.py          
 ├── data/
-│   └── dataset_loader.py   # Dataset handling and preprocessing
-└── create_model.py         # Script to generate placeholder model
+│   └── dataset_loader.py   
+└── create_model.py         
 ```
 
 ## Components
