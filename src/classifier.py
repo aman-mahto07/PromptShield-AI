@@ -1,6 +1,4 @@
 """
-classifier.py
--------------
 Loads the pre-trained Logistic Regression model and returns
 a probability score indicating how adversarial a prompt is.
 """

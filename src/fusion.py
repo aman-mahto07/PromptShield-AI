@@ -1,6 +1,5 @@
 """
-fusion.py  —  v2.0 Enhanced Fusion Engine
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Combines ML probability + rule score into a final verdict.
 
 Improvements over v1:

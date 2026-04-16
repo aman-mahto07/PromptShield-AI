@@ -1,6 +1,4 @@
 """
-embedding.py  —  v2.0 Enhanced
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Loads the sentence-transformer and embeds prompts.
 Added: preprocessing pipeline (deobfuscation) before embedding,
        so the ML model sees clean text even when input is obfuscated.

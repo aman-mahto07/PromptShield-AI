@@ -1,6 +1,5 @@
 """
-rules.py  —  v3.0 (Full Rewrite)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Comprehensive adversarial prompt detection:
 
   • Deep leet-speak / l33t normalization (full character map)

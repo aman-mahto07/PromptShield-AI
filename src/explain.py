@@ -1,6 +1,4 @@
 """
-explain.py  —  v2.0 Enhanced Explanations & Sanitizer
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Richer flag explanations, severity levels, attack-category grouping,
 and smarter sanitization with more replacement patterns.
 """
