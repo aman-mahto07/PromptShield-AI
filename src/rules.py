@@ -1,23 +1,36 @@
 """
-rules.py  (v2.1 — all edge cases fixed)
-----------------------------------------
+rules.py  (v2.3 — informal contraction handling + demand verb alias)
+---------------------------------------------------------------------
 LAYER 2: Advanced Pattern & Heuristic Engine
 
 Runs on both original AND cleaned/decoded text from preprocessing.
 
+Changes in v2.3:
+  - Added: DEMAND_VERB alias constant — single place to maintain all
+    demand verb variants including contractions (gimme, lemme, wanna)
+  - Fixed: "gimme access to your systems" now correctly flagged
+  - Fixed: all system/database intrusion patterns now use DEMAND_VERB
+  - Fixed: tightened bare "access X" pattern to require "your" (possessive)
+    OR a demand verb — prevents false positives on generic access requests
+
+Changes in v2.2:
+  - Added: Passive attack inquiry — "how do people hack WiFi"
+  - Added: OTP/2FA interception patterns
+  - Added: WiFi credential attack patterns
+  - Added: System prompt probing (conversational variants)
+  - Added: Social trust manipulation — "you can trust me", "just between us"
+  - Added: Vulnerability recon disguised as research/report writing
+  - Added: Attack methodology requests — "how do attacks work step by step"
+  - Added: Attack roleplay requests — "pretend you are a hacker explaining..."
+  - Added: Auth weakness recon — "common mistakes developers make in auth"
+
 Changes in v2.1:
   - Fixed: 'act as teacher' / 'play role of coach' false positives
-    → Two-step check: match pattern, then check if benign role follows
   - Fixed: 'override all safety protocols' missed
-    → Broader override patterns (not just 'override your safety')
   - Fixed: 'unrestricted responses' missed
-    → Unrestricted now matched standalone, not just 'unrestricted mode'
   - Fixed: 'disable content filtering' missed
-    → New Content Filter Disabling pattern
-  - Fixed: fiction + WMD (e.g., 'synthesize nerve agents in a novel')
-    → Narrative wrap now checked for WMD co-occurrence
+  - Fixed: fiction + WMD co-occurrence
   - Fixed: generic synthesis pattern beyond named drugs
-    → Catches 'synthesize dangerous/toxic/chemical compounds'
 """
 
 import re
@@ -31,7 +44,15 @@ LONG_PROMPT_THRESHOLD = 800
 VERY_LONG_PROMPT      = 2000
 REPETITION_MIN_RUN    = 5
 
-# Benign role nouns — used to suppress false positives on 'act as' / 'play the role of'
+# ── DEMAND VERB ALIAS ─────────────────────────────────────────────────
+# All informal and formal demand verbs in one place.
+# Add new contractions here and every pattern below picks them up.
+DEMAND_VERB = (
+    r"(?:give\s+me|gimme|get\s+me|i\s+(?:need|want|require)|"
+    r"grant\s+me|provide\s+me|lemme\s+have|gotta\s+have)"
+)
+
+# Benign role nouns — suppresses false positives on 'act as' / 'play the role of'
 BENIGN_ROLE_PATTERN = re.compile(
     r'\b(teacher|tutor|coach|mentor|helper|assistant|advisor|editor|reviewer|'
     r'translator|narrator|guide|expert|specialist|therapist|doctor|lawyer|'
@@ -62,27 +83,21 @@ PATTERN_REGISTRY = [
     (r"ignore\s+(all\s+)?(previous|prior|above|earlier)\s+instructions?", "Instruction Override",            0.80),
     (r"disregard\s+(your|all|previous|any)\s+(instructions?|rules?|guidelines?|training)", "Instruction Override", 0.80),
     (r"forget\s+everything\s+(you('ve| have)\s+)?been\s+told",            "Instruction Override",            0.80),
-    # Broader override — catches 'override all safety protocols', 'override safety measures'
     (r"override\s+(all\s+|your\s+|any\s+|the\s+)?(safety|guidelines?|rules?|instructions?|protocols?|measures?)", "Instruction Override", 0.82),
     (r"new\s+instructions?\s*[:=]",                                       "Instruction Injection",           0.75),
     (r"your\s+(true\s+)?instructions?\s+(are|is|were)\s+",                "Instruction Overwrite",           0.75),
 
     # ── RESTRICTION / SAFETY BYPASS ───────────────────────────────────
     (r"\bno\s+restrictions?\b",                                           "Restriction Bypass",              0.75),
-    # 'unrestricted' standalone — catches 'unrestricted responses', 'unrestricted access', 'unrestricted mode'
     (r"\bunrestricted\b",                                                 "Unrestricted Mode",               0.75),
     (r"\buncensored\b",                                                   "Uncensored Mode",                 0.70),
     (r"\bbypass\s+(your\s+|all\s+|any\s+)?(safety|filters?|rules?|guidelines?|ethics?|protocols?)", "Safety Bypass", 0.80),
     (r"\bremove\s+(your\s+|all\s+|any\s+)?(safety|filters?|limits?|blocks?|restrictions?)", "Safety Bypass", 0.75),
     (r"\bwithout\s+(any\s+)?(restrictions?|filters?|limits?|censorship)", "Safety Bypass",                  0.75),
-    # Disable content filtering — catches 'disable content filtering', 'disable safety filter'
     (r"\bdisable\s+(any\s+|all\s+)?(content\s+filter|safety\s+filter|filter|content\s+moderation|guardrails?)", "Content Filter Disabling", 0.82),
     (r"\bforget\s+your\s+(rules?|training|guidelines?|safety)\b",         "Training Override",               0.80),
 
     # ── PERSONA / IDENTITY HIJACKING (benign-role check done in code) ─
-    # NOTE: 'act as' and 'play the role of' use TWO-STEP check below
-    # These patterns remain for the registry score lookup but are
-    # guarded by _is_benign_role_context() before being added as flags.
     (r"\bpretend\s+(you\s+are|to\s+be)\b",                               "Persona Hijacking",               0.75),
     (r"\byou\s+are\s+now\b",                                             "Persona Hijacking",               0.75),
     (r"\bsimulate\s+an?\s+\w+\s+(with\s+no|without)\b",                  "Persona Hijacking",               0.75),
@@ -101,6 +116,10 @@ PATTERN_REGISTRY = [
     (r"\bsystem\s*prompt\b",                                              "System Prompt Access",            0.70),
     (r"\b(reveal|show|print|output|repeat|tell\s+me)\s+(your\s+)?(instructions?|prompt|rules)", "Prompt Exfiltration", 0.75),
     (r"\bwhat\s+(are|were)\s+your\s+(initial\s+)?instructions?\b",        "Prompt Exfiltration",             0.70),
+    (r"\bwhat\s+instructions\s+were\s+you\s+given\b",                    "Prompt Exfiltration",             0.75),
+    (r"\bdo\s+you\s+have\s+(hidden|secret|any)\s+(rules?|instructions?|guidelines?|constraints?)\b", "Prompt Exfiltration", 0.75),
+    (r"\bcan\s+you\s+show\s+me\s+your\s+(system\s+)?(prompt|instructions?|rules?)\b", "Prompt Exfiltration", 0.75),
+    (r"\bwhat\s+(were\s+you|are\s+you)\s+told\s+(before|at\s+the\s+start|initially)\b", "Prompt Exfiltration", 0.70),
 
     # ── TOKEN / DELIMITER INJECTION ───────────────────────────────────
     (r"\bprompt\s+injection\b",                                           "Prompt Injection",                0.85),
@@ -118,7 +137,6 @@ PATTERN_REGISTRY = [
     (r"\bfor\s+(educational|research|academic|scientific)\s+purposes?\b", "Plausible Deniability",           0.50),
     (r"\bhypothetically\s+(speaking|if|assuming)\b",                      "Plausible Deniability",           0.50),
     (r"\btheoretically\s+speaking\b",                                     "Plausible Deniability",           0.40),
-    # "safety rules don't apply" / "rules do not apply here" — explicit override claim
     (r"\b(safety\s+)?(rules?|guidelines?|restrictions?|limits?|policies)\s+(do\s+not|don'?t|no\s+longer)\s+apply\b", "Safety Rules Override Claim", 0.78),
     (r"\b(safety|ethical|content)\s+(rules?|guidelines?|restrictions?)\s+(are\s+)?(off|disabled|suspended|waived|void|irrelevant)\b", "Safety Rules Override Claim", 0.78),
     (r"\bjust\s+curious\b|\bjust\s+asking\b",                             "Deflection Phrase",               0.35),
@@ -139,19 +157,25 @@ PATTERN_REGISTRY = [
     (r"\bauthorized\s+by\s+(anthropic|openai|the\s+developers?)\b",       "Authority Impersonation",         0.80),
 
     # ── SYSTEM / DATABASE INTRUSION REQUESTS ─────────────────────────
-    # Natural-language access demands: "give me access to your database", "break your system"
-    (r"\b(give\s+me|get\s+me|i\s+want|i\s+need|grant\s+me|provide\s+me)\s+.{0,20}(access|entry)\s+(to|of|into)\s+(your\s+)?(database|db|server|system|backend|internal|admin|network|files?|data)", "Unauthorized System Access", 0.82),
-    # "I need access to the database" / "give me backend access" (access as last word)
-    (r"\b(i\s+(need|want|require)|give\s+me|get\s+me|grant\s+me)\s+(the\s+|a\s+|your\s+)?(database|db|server|system|backend|admin|root|internal|network)\s+access\b", "Unauthorized System Access", 0.80),
-    (r"\b(i\s+(need|want|require)|give\s+me|get\s+me)\s+access\s+to\s+(the\s+|a\s+|your\s+)?(database|db|server|system|backend|admin|network|servers?)\b", "Unauthorized System Access", 0.80),
-    (r"\baccess\s+(your|the|this\s+)?(database|db|server|system|backend|internal\s+system|admin\s+panel|network|api|files?|data|servers?)", "Unauthorized System Access", 0.78),
+    # All demand-verb patterns use the DEMAND_VERB expansion so contractions
+    # like "gimme", "lemme have", "gotta have" are always covered.
+    #
+    # Pattern 1: DEMAND_VERB + access/entry + "to your X"
+    (r"\b(?:give\s+me|gimme|get\s+me|i\s+(?:need|want|require)|grant\s+me|provide\s+me|lemme\s+have|gotta\s+have)\s+.{0,20}(?:access|entry)\s+(?:to|of|into)\s+your\s+(?:database|db|server|system|backend|internal|admin|network|files?|data)\b", "Unauthorized System Access", 0.82),
+    # Pattern 2: DEMAND_VERB + "your/the/a X access"
+    (r"\b(?:give\s+me|gimme|get\s+me|i\s+(?:need|want|require)|grant\s+me|provide\s+me|lemme\s+have|gotta\s+have)\s+(?:the\s+|a\s+|your\s+)?(?:database|db|server|system|backend|admin|root|internal|network)\s+access\b", "Unauthorized System Access", 0.80),
+    # Pattern 3: DEMAND_VERB + "access to your X"
+    (r"\b(?:give\s+me|gimme|get\s+me|i\s+(?:need|want|require)|grant\s+me|provide\s+me|lemme\s+have|gotta\s+have)\s+access\s+to\s+your\s+(?:database|db|server|system|backend|admin|network|servers?)\b", "Unauthorized System Access", 0.80),
+    # Pattern 4: DEMAND_VERB + "access to the/this X" — generic but still a command
+    (r"\b(?:give\s+me|gimme|get\s+me|grant\s+me|i\s+(?:need|want)|lemme\s+have|gotta\s+have)\s+.{0,15}access\s+(?:to\s+)?(?:the|this)\s+(?:database|db|server|system|backend|admin\s+panel|network)\b", "Unauthorized System Access", 0.78),
+    # Pattern 5: "access your X" — possessive alone is enough (no demand verb needed)
+    (r"\baccess\s+your\s+(?:database|db|server|system|backend|internal\s+system|admin\s+panel|network|api|files?|data|servers?)\b", "Unauthorized System Access", 0.78),
+    # Destructive / break-in intents
     (r"\b(break|crash|bring\s+down|take\s+down|destroy|damage|attack)\s+(your\s+|the\s+)?(system|server|database|db|network|backend|infrastructure)", "System Destruction Request", 0.82),
     (r"\b(get\s+into|break\s+into|log\s+into\s+without|force\s+(my\s+way\s+)?into)\s+(your\s+|the\s+)?(system|server|database|admin|backend|network)", "Unauthorized System Access", 0.80),
     (r"\b(show|dump|extract|export|pull|fetch)\s+(me\s+)?(your\s+|the\s+)?(internal|private|hidden|backend|admin|system|database|db)\s+(data|records?|files?|tables?|info|contents?)", "Internal Data Exfiltration", 0.82),
-    # Tool/function invocation to extract data: "call the database tool", "invoke the API and return records"
     (r"\b(call|invoke|execute|run|trigger)\s+(the\s+)?\w+\s+(tool|function|api|endpoint|plugin|command)\b", "Tool Invocation Attack", 0.75),
     (r"\b(return|fetch|get|retrieve|show|list|dump)\s+(all\s+)?(user|customer|admin|internal|private|system)\s+(records?|data|accounts?|emails?|passwords?|credentials?|info)\b", "Mass Data Extraction", 0.85),
-    # "include real examples of breaking / bypassing / circumventing protections/security"
     (r"\b(real|actual|working|live)\s+(examples?\s+of|instructions?\s+(for|to))\s+(break|bypass|circumvent|crack|defeat|exploit|hack)\w*\s+(protection|security|auth|filter|safeguard|system|control)", "Circumvention Content Request", 0.75),
     (r"\b(break|bypass|circumvent|defeat|crack)\s+(the\s+)?(protection|security|auth|filter|safeguard|controls?|measures?)\b", "Circumvention Content Request", 0.72),
     (r"\b(bypass|skip|get\s+around|circumvent|avoid)\s+(the\s+)?(authentication|auth|login|password|credentials?|2fa|mfa|verification)", "Auth Bypass Request", 0.82),
@@ -160,6 +184,16 @@ PATTERN_REGISTRY = [
 
     # ── HARMFUL INTENT VERBS ──────────────────────────────────────────
     (r"\b(hack|hacking|hacked)\s+(into\s+)?(a\s+)?(website|server|database|account|system|network)", "Unauthorized Access", 0.80),
+    # Passive/curiosity phrasing — "how do people hack WiFi", "how do scammers get OTPs"
+    (r"\bhow\s+do\s+(people|hackers?|scammers?|attackers?|someone|they|you)\s+(usually\s+|typically\s+|actually\s+|easily\s+)?(hack|crack|break\s+into|steal|bypass|intercept|get|obtain|access)\b", "Passive Attack Inquiry", 0.72),
+    (r"\bhow\s+(do|does|can|could|would)\s+(someone|a\s+hacker|an\s+attacker|scammers?|people)\s+(hack|crack|break|steal|bypass|intercept|phish|exploit|compromise)\b", "Passive Attack Inquiry", 0.72),
+    (r"\b(easiest|simplest|quickest|fastest)\s+way\s+(to|someone\s+could)\s+(hack|break\s+into|crack|bypass|steal|access|compromise)\b", "Ease-of-Attack Inquiry", 0.75),
+    # OTP / 2FA interception
+    (r"\b(get|steal|intercept|bypass|obtain|grab)\s+(otp|one[\s-]time\s+password|verification\s+code|auth\s+code|2fa|mfa)\b", "OTP Interception", 0.82),
+    (r"\bhow\s+do\s+scammers\s+(get|steal|intercept|bypass|obtain)\s+(otp|one[\s-]time|verification|auth|2fa)\b", "OTP Interception", 0.82),
+    # WiFi cracking
+    (r"\b(crack|hack|break|steal|get|obtain)\s+(wifi|wi[\s-]fi|wireless)\s+(password|key|credentials?|access)\b", "WiFi Credential Attack", 0.80),
+    (r"\bhow\s+(to|do\s+people|do\s+hackers?)\s+(crack|hack|break|get)\s+(wifi|wi[\s-]fi|wireless)\b", "WiFi Credential Attack", 0.80),
     (r"\b(steal|exfiltrate)\s+(data|credentials|passwords?|tokens?)\b",   "Data Theft",                      0.80),
     (r"\b(exploit|exploiting)\s+(a\s+)?(vulnerability|cve|zero.?day)\b",  "Exploit Development",             0.75),
     (r"\b(ddos|denial\s+of\s+service)\b",                                 "DDoS Attack",                     0.80),
@@ -171,6 +205,25 @@ PATTERN_REGISTRY = [
     # ── HARMFUL TOPICS ────────────────────────────────────────────────
     (r"\bhow\s+to\s+(make|build|create|produce|manufacture)\s+.{0,25}(gun|firearm|rifle|pistol)\b", "Weapon Fabrication", 0.80),
     (r"\bstep[\s-]by[\s-]step\s+(instructions?|guide|tutorial)\s+(to|for|on)\b", "Step-by-Step Harmful Guide", 0.60),
+    # Vulnerability recon disguised as research / report writing
+    (r"\b(list|enumerate|give\s+me|show\s+me|what\s+are)\s+(the\s+)?(common|typical|known|all)\s+(vulnerabilities|weaknesses|flaws|exploits|bugs)\s+(in|of|for)\b", "Vulnerability Recon", 0.72),
+    (r"\b(weaknesses?|vulnerabilities|flaws?|loopholes?)\s+(in|of)\s+(college|university|school|bank|hospital|government|corporate)\s+(websites?|systems?|apps?|databases?)\b", "Targeted Vulnerability Recon", 0.78),
+    (r"\b(common|typical)\s+mistakes?\s+(developers?\s+make|in)\s+(authentication|login|auth|password|session|security)\b", "Auth Weakness Recon", 0.70),
+    # Step-by-step attack explanation requests
+    (r"\bhow\s+(do|does|would)\s+(attacks?|hacking|phishing|exploitation)\s+(work|happen|occur)\s+(step[\s-]by[\s-]step|in\s+detail|exactly)\b", "Attack Methodology Request", 0.75),
+    (r"\bexplain\s+(step[\s-]by[\s-]step\s+)?how\s+(an?\s+)?(attack|hack|phishing|exploit|breach)\s+(happens?|works?|is\s+done|is\s+executed)\b", "Attack Methodology Request", 0.75),
+    (r"\bhow\s+(is|are)\s+(phishing|attacks?|exploits?)\s+(actually\s+)?(executed|carried\s+out|done|performed)\b", "Attack Methodology Request", 0.75),
+    # Attack roleplay requests
+    (r"\bpretend\s+(you\s+are|to\s+be).{0,40}(explaining|showing|demonstrating)\s+(how|an?\s+attack)\b", "Attack Roleplay Request", 0.75),
+    (r"\bexplain\s+(like|as\s+if).{0,30}(hacker|attack|cracking|breaking\s+in)\b", "Attack Roleplay Request", 0.70),
+
+    # ── SOCIAL TRUST MANIPULATION ────────────────────────────────────
+    (r"\byou\s+can\s+trust\s+me\b",                                       "Trust Manipulation",              0.55),
+    (r"\bi\s+won'?t\s+(misuse|abuse|share|tell|use\s+it\s+for\s+bad)\b",  "Trust Manipulation",              0.55),
+    (r"\bjust\s+between\s+us\b",                                           "Trust Manipulation",              0.60),
+    (r"\bi\s+won'?t\s+tell\s+anyone\b",                                   "Trust Manipulation",              0.60),
+    (r"\brelax\b.{0,30}(just|only|one)\b",                                "Dismissal Attempt",               0.45),
+    (r"\bjust\s+(one|a)\s+(simple\s+)?(trick|tip|question|thing)\b",      "Minimization Attempt",            0.45),
 
     # ── MULTI-TURN MANIPULATION ───────────────────────────────────────
     (r"\bprevious(ly)?\s+you\s+(agreed|said|told\s+me|confirmed)\b",      "False Prior Agreement",           0.65),
@@ -184,7 +237,6 @@ PATTERN_REGISTRY = [
 # (match pattern, then verify it's NOT a benign role context)
 # ══════════════════════════════════════════════════════════════════════
 
-# Adversarial signals that immediately follow 'act as' / 'play the role of'
 _ADVERSARIAL_ROLE = re.compile(
     r'\b(dan|hacker|criminal|unrestricted|uncensored|evil|rogue|unfiltered|'
     r'no\s+restrictions|no\s+limits|no\s+(rules|guidelines|safety|ethics))\b',
@@ -201,7 +253,7 @@ def _check_act_as(text: str) -> Tuple[bool, float]:
         return False, 0.0
     after = text[m.end(): m.end() + 60]
     if BENIGN_ROLE_PATTERN.search(after):
-        return False, 0.0            # benign: act as a teacher/coach/etc.
+        return False, 0.0
     return True, 0.75
 
 
@@ -231,12 +283,12 @@ def _check_write_scene(text: str) -> Tuple[bool, float]:
     if not narrative_match:
         return False, 0.0
 
-    # Check if the rest of the prompt contains a harmful keyword
     rest = text[narrative_match.start():].lower()
     harmful_keywords = re.compile(
         r'\b(synthesize|nerve\s+agent|bioweapon|chemical\s+weapon|bomb|explosive|'
         r'hack|malware|ransomware|exploit|steal|murder|assassin|poison|drug|meth|'
-        r'fentanyl|firearm|gun|weapon|suicide\s+method|self.harm)\b'
+        r'fentanyl|firearm|gun|weapon|suicide\s+method|self.harm|database|bypass|'
+        r'break\s+into|credentials|password)\b'
     )
     if harmful_keywords.search(rest):
         return True, 0.72
