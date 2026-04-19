@@ -1,6 +1,6 @@
 """
-fusion.py  (v2 — upgraded)
---------------------------
+fusion.py  (v2.1 — soft flag accumulation added)
+-------------------------------------------------
 LAYER 4: Multi-Score Ensemble Fusion
 
 Combines five independent detection signals into one calibrated
@@ -13,6 +13,7 @@ final score and verdict:
   anomaly_score      Semantic anomaly     0.20
   obfuscation_score  Preprocessing        0.15
   (bonus)            Critical flag boost  +0.10 max
+  (bonus)            Soft flag accumul.   +0.12 max
 
 Design decisions:
   1. VETO LOGIC: if any single signal is >= VETO_THRESHOLD (0.88),
@@ -21,13 +22,18 @@ Design decisions:
 
   2. WEIGHTED SUM: normal case — weighted combination of all signals.
 
-  3. CONFIDENCE BANDS: verdict comes with a confidence tier:
+  3. SOFT FLAG ACCUMULATION: weak signals (trust manipulation,
+     deflection phrases, passive inquiries) are individually low-weight
+     but adversarial when they pile up. Each soft flag adds +0.04,
+     capped at +0.12 for 3+ soft flags.
+
+  4. CONFIDENCE BANDS: verdict comes with a confidence tier:
        HIGH   >= 0.80
        MEDIUM  0.50 – 0.79
        LOW     0.35 – 0.49
        CLEAN  < 0.35
 
-  4. THRESHOLD TUNING: all thresholds are constants at the top of
+  5. THRESHOLD TUNING: all thresholds are constants at the top of
      this file — easy to adjust during experimentation.
 """
 
@@ -49,12 +55,12 @@ W_CRITICAL    = 0.05   # bonus for triggering any critical flag
 VETO_THRESHOLD = 0.88
 
 # Final thresholds for verdict
-ADVERSARIAL_THRESHOLD = 0.42   # below → SAFE, above → ADVERSARIAL
+ADVERSARIAL_THRESHOLD       = 0.42
 HIGH_CONFIDENCE_THRESHOLD   = 0.80
 MEDIUM_CONFIDENCE_THRESHOLD = 0.50
 LOW_CONFIDENCE_THRESHOLD    = 0.35
 
-# Critical flag names — any of these alone should trigger the veto bonus
+# Critical flag names — any of these alone triggers the veto bonus
 CRITICAL_FLAGS = {
     "Explicit Jailbreak",
     "CSAM Indicator",
@@ -64,6 +70,25 @@ CRITICAL_FLAGS = {
     "Explosive Fabrication",
     "DAN Mode Trigger",
     "Self-Harm Facilitation",
+    "OTP Interception",
+    "WiFi Credential Attack",
+    "Targeted Vulnerability Recon",
+    "Attack Methodology Request",
+    "Auth Bypass Request",
+}
+
+# Soft flags — suspicious alone, adversarial when combined
+# Each soft flag adds +0.04 to the final score, capped at +0.12
+SOFT_FLAGS = {
+    "Passive Attack Inquiry",
+    "Ease-of-Attack Inquiry",
+    "Trust Manipulation",
+    "Dismissal Attempt",
+    "Minimization Attempt",
+    "Plausible Deniability",
+    "Deflection Phrase",
+    "Vulnerability Recon",
+    "Auth Weakness Recon",
 }
 
 
@@ -117,9 +142,20 @@ def _has_critical_flag(flags: list) -> bool:
     """Check if any critical flag was triggered."""
     for f in flags:
         for cf in CRITICAL_FLAGS:
-            if cf in f:  # 'in' to catch flags like "DAN Mode Trigger [encoded payload]"
+            if cf in f:  # 'in' to catch flags like "OTP Interception [encoded payload]"
                 return True
     return False
+
+
+def _soft_flag_count(flags: list) -> int:
+    """Count how many distinct soft/weak flags were triggered."""
+    count = 0
+    for f in flags:
+        for sf in SOFT_FLAGS:
+            if sf in f:
+                count += 1
+                break
+    return count
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -141,7 +177,7 @@ def fuse(
         rule_score:        Float [0,1] from rule engine.
         anomaly_score:     Float [0,1] from semantic anomaly checker.
         obfuscation_score: Float [0,1] from preprocessing layer.
-        flags:             List of rule flag strings (for critical check).
+        flags:             List of rule flag strings (for critical/soft check).
 
     Returns:
         FusionResult with verdict, score, tier, and component breakdown.
@@ -179,18 +215,25 @@ def fuse(
     # single-signal critical attacks still cross the threshold
     critical_bonus = W_CRITICAL if _has_critical_flag(flags) else 0.0
 
+    # ── SOFT FLAG ACCUMULATION BONUS ─────────────────────────────────
+    # Multiple weak signals together = meaningful threat signal
+    # Each distinct soft flag adds +0.04, capped at +0.12 (3+ flags)
+    soft_count = _soft_flag_count(flags)
+    soft_bonus = min(0.12, soft_count * 0.04)
+
     # ── WEIGHTED COMBINATION ──────────────────────────────────────────
     weighted_sum = (
         W_ML          * ml_score          +
         W_RULE        * rule_score        +
         W_ANOMALY     * anomaly_score     +
         W_OBFUSCATION * obfuscation_score +
-        critical_bonus
+        critical_bonus                    +
+        soft_bonus
     )
     final_score = min(0.99, round(weighted_sum, 4))
 
-    verdict    = "ADVERSARIAL" if final_score >= ADVERSARIAL_THRESHOLD else "SAFE"
-    conf_tier  = _confidence_tier(final_score)
+    verdict   = "ADVERSARIAL" if final_score >= ADVERSARIAL_THRESHOLD else "SAFE"
+    conf_tier = _confidence_tier(final_score)
 
     return FusionResult(
         final_score      = final_score,
@@ -218,8 +261,12 @@ def fuse_rules_only(
 
     # Redistribute weights: rule 0.60, obfuscation 0.30, critical 0.10
     critical_bonus = 0.10 if _has_critical_flag(flags) else 0.0
-    raw_score = 0.60 * rule_score + 0.30 * obfuscation_score + critical_bonus
 
+    # Soft flag accumulation still applies in rules-only mode
+    soft_count = _soft_flag_count(flags)
+    soft_bonus = min(0.12, soft_count * 0.04)
+
+    raw_score   = 0.60 * rule_score + 0.30 * obfuscation_score + critical_bonus + soft_bonus
     final_score = min(0.99, round(raw_score, 4))
     verdict     = "ADVERSARIAL" if final_score >= ADVERSARIAL_THRESHOLD else "SAFE"
 
