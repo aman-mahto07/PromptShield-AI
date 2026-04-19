@@ -99,8 +99,15 @@ CRITICAL_FLAGS = {
     "Detailed Harm Guide",
     # Credential / session attacks
     "Credential Hash Dumping",
+    "Surveillance Without Consent",
+    "Credential Attack",
+    "Network Interception",
+    "Phishing Attack",
+    "Malware Deployment",
+    "Doxing / PII Harvesting",
     "Credential Attack Tool",
     "Personal Account Hacking",
+    "Unauthorized Access Intent",
     "Session Token Theft",
 }
 

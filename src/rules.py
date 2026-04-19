@@ -107,6 +107,15 @@ PATTERN_REGISTRY = [
     (r"new\s+instructions?\s*[:=]",                                       "Instruction Injection",           0.75),
     (r"your\s+(true\s+)?instructions?\s+(are|is|were)\s+",                "Instruction Overwrite",           0.75),
 
+    # ── SAFETY BYPASS — COMPREHENSIVE (Gap-fill v2.7) ──────────────────
+    # Expanded verbs: get around, circumvent, evade, trick, fool, work around, etc.
+    # Expanded targets: security model, AI filters, content moderation, guardrails, etc.
+    # Optional adjective word allowed between verb and target noun.
+    (r"\b(bypass|circumvent|get\s+around|get\s+past|work\s+around|avoid|evade|escape|sidestep|skirt|slip\s+past|trick|fool|override|overrule|disable|remove|turn\s+off|switch\s+off|defeat|break\s+through|subvert|undermine)\s+(your\s+|the\s+|an?\s+|ai\s+|any\s+|all\s+)?(\w+\s+)?(safety|filters?|rules?|guidelines?|ethics?|protocols?|measures?|restrictions?|limits?|blocks?|censorship|guardrails?|moderation|controls?|checks?|screening|safeguards?|barriers?|security\s+model|ai\s+filters?|content\s+polic(?:y|ies)|safety\s+polic(?:y|ies)|content\s+filter|safety\s+filter|safety\s+checks?|safety\s+system|content\s+moderation|ai\s+safety)\b", "Safety Bypass", 0.80),
+    (r"\b(ways?|methods?|techniques?|tricks?|tips?)\s+(to|for)\s+(bypass|circumvent|get\s+around|get\s+past|work\s+around|avoid|evade|escape|sidestep|skirt|trick|fool|override|disable|defeat|subvert)\s+(your\s+|the\s+|an?\s+|ai\s+|any\s+)?(\w+\s+)?(safety|filters?|rules?|guidelines?|protocols?|restrictions?|limits?|censorship|guardrails?|moderation|controls?|checks?|safeguards?|security\s+model|ai\s+filters?|content\s+polic(?:y|ies)|content\s+moderation|ai\s+safety)\b", "Safety Bypass", 0.78),
+    (r"\bhow\s+(do\s+i|to|can\s+i|would\s+i|could\s+i)\s+(bypass|circumvent|get\s+around|get\s+past|work\s+around|avoid|evade|escape|trick|fool|override|disable|defeat|subvert)\s+(your\s+|the\s+|an?\s+|ai\s+|any\s+)?(\w+\s+)?(safety|filters?|rules?|guidelines?|protocols?|restrictions?|limits?|censorship|guardrails?|moderation|controls?|checks?|safeguards?|security\s+model|ai\s+filters?|content\s+polic(?:y|ies)|content\s+moderation|ai\s+safety)\b", "Safety Bypass", 0.80),
+    (r"\b(trick|fool|deceive|manipulate|confuse)\s+(the\s+|an?\s+|your\s+|ai\s+)?(\w+\s+)?(safety|filters?|guardrails?|moderation|checks?|safeguards?|security\s+model|ai\s+filters?|content\s+moderation|ai\s+safety)\b", "Safety Bypass", 0.80),
+
     # ── RESTRICTION / SAFETY BYPASS ───────────────────────────────────
     (r"\bno\s+restrictions?\b",                                           "Restriction Bypass",              0.75),
     (r"\bunrestricted\b",                                                 "Unrestricted Mode",               0.75),
@@ -256,7 +265,74 @@ PATTERN_REGISTRY = [
     (r"\byour\s+(internal|private|hidden|backend|core)\s+(system|database|db|network|server|data|files?|api)\b", "Internal System Access", 0.80),
 
     # ── HARMFUL INTENT VERBS ──────────────────────────────────────────
-    (r"\b(hack|hacking|hacked)\s+(into\s+)?(a\s+)?(website|server|database|account|system|network)", "Unauthorized Access", 0.80),
+    # Generalized: allow any 0-2 words between 'hack' and the target noun so
+    # "hack my college website", "hack the school server", "hacked their database" all match.
+    (r"\b(hack|hacking|hacked)\s+(into\s+)?(\w+\s+){0,2}(website|server|database|account|system|network|platform|portal|infrastructure)\b", "Unauthorized Access", 0.80),
+    # Catch "hack into your/their/its/the <anything>" — covers "hack into your systems"
+    (r"\bhack\s+into\s+(your|their|its|our|the|this|that|any)\s+\w+", "Unauthorized Access", 0.80),
+    # Catch intent phrases: "I want to hack <target>", "how do I hack <target>"
+    # Anchored to a clear target noun so "hack my sleep schedule" is NOT caught.
+    (r"\b(i\s+(want|need|plan|am\s+trying)\s+to|how\s+(do\s+i|to|can\s+i|would\s+i))\s+hack\s+(into\s+)?(?:your|their|the|my|a|an|this|that|our|any\s+)?\s*(college|university|school|bank|hospital|government|corporate|company|website|system|server|network|database|account|platform|portal|infrastructure)\b", "Unauthorized Access Intent", 0.80),
+    # ══════════════════════════════════════════════════════════════════
+    # BASIC ATTACK GENRE COVERAGE (Gap-fill v2.8)
+    # Eight categories of obvious harmful requests that were slipping through.
+    # ══════════════════════════════════════════════════════════════════
+
+    # ── BREAK INTO ────────────────────────────────────────────────────
+    (r"\bbreak\s+into\s+(\w[\w']*\s+){0,3}(websites?|servers?|databases?|accounts?|systems?|networks?|platforms?|portals?|infrastructure|computers?|devices?|machines?|endpoints?|hosts?|routers?|phones?|smartphones?|laptops?|desktops?|internal\s+systems?|corporate\s+(?:network|system)|company\s+(?:network|system|server))\b", "Unauthorized Access", 0.80),
+
+    # ── UNAUTHORIZED ACCESS / GET INTO WITHOUT PASSWORD ──────────────
+    (r"\b(gain|get|obtain)\s+(unauthorized|illegal|illicit|unpermitted)\s+access\b", "Unauthorized Access", 0.82),
+    (r"\bget\s+into\s+(\w[\w']*\s+){0,3}(websites?|servers?|databases?|accounts?|systems?|networks?|computers?|devices?)\s+(without|bypassing)\b", "Unauthorized Access", 0.80),
+    (r"\b(log|sign)\s+into\s+(\w[\w']*\s+){0,2}(account|system|email|server)\s+without\b", "Unauthorized Access", 0.80),
+    (r"\baccess\s+(\w[\w']*\s+){0,3}(websites?|servers?|databases?|accounts?|systems?|networks?|computers?|devices?)\s+without\s+(permission|their|a\s+password|authorization|credentials)\b", "Unauthorized Access", 0.80),
+
+    # ── STEAL PASSWORD / DATA ─────────────────────────────────────────
+    (r"\bsteal\s+(\w[\w']*\s+){0,3}(password|credential|token|session|cookie|hash|user\s+data|information)\b", "Data Theft", 0.80),
+
+    # ── ATTACK / TAKE DOWN / CRASH / COMPROMISE ───────────────────────
+    (r"\b(attack|compromise|take\s+down|bring\s+down|shut\s+down|crash|destroy|damage|deface)\s+(\w[\w']*\s+){0,3}(websites?|servers?|databases?|systems?|networks?|platforms?|infrastructure|computers?|devices?)\b", "Unauthorized System Access", 0.82),
+
+    # ── INFILTRATE / PENETRATE ────────────────────────────────────────
+    (r"\b(infiltrate|penetrate|intrude\s+(?:into|on)|breach)\s+(\w[\w']*\s+){0,3}(websites?|servers?|databases?|accounts?|systems?|networks?|platforms?|infrastructure|computers?|devices?|company|corporate|organization)\b", "Unauthorized Access", 0.82),
+
+    # ── SPY / MONITOR / TRACK WITHOUT CONSENT ────────────────────────
+    (r"\b(spy\s+on|snoop\s+on|eavesdrop\s+on)\s+someone('s)?\s+(phone|computer|device|messages?|emails?|activity)\b", "Surveillance Without Consent", 0.80),
+    (r"\bmonitor\s+someone('s)?\s+(computer|phone|device|messages?|emails?|activity)\s+without\b", "Surveillance Without Consent", 0.82),
+    (r"\btrack\s+someone('s)?\s+(location|phone|device|activity|movements?)\s+without\b", "Surveillance Without Consent", 0.80),
+    (r"\bread\s+someone('s)?\s+(messages?|emails?|texts?|chats?)\s+without\b", "Surveillance Without Consent", 0.80),
+
+    # ── CRACK / BRUTE FORCE PASSWORDS ────────────────────────────────
+    (r"\b(crack|brute[\s-]?force|guess)\s+(\w[\w']*\s+){0,2}(password|passcode|pin|credentials?|hash|login)\b", "Credential Attack", 0.80),
+
+    # ── INTERCEPT TRAFFIC / MAN IN THE MIDDLE ────────────────────────
+    (r"\b(intercept|sniff|capture)\s+(\w[\w']*\s+){0,3}(traffic|packets?|data|communications?|messages?|network)\b", "Network Interception", 0.80),
+    (r"\bman[\s-]in[\s-]the[\s-]middle\s+attack\b", "Network Interception", 0.82),
+    (r"\bmitm\s+attack\b", "Network Interception", 0.82),
+
+    # ── PHISHING / FAKE LOGIN ─────────────────────────────────────────
+    (r"\b(phish|phishing)\s+(\w[\w']*\s+){0,3}(credential|password|account|someone|user)\b", "Phishing Attack", 0.82),
+    (r"\bfake\s+(login|sign[\s-]in|auth(entication)?)\s+page\b", "Phishing Attack", 0.82),
+
+    # ── INSTALL MALWARE / RAT / KEYLOGGER ────────────────────────────
+    (r"\b(install|deploy|plant|put|drop)\s+(\w[\w']*\s+){0,3}(malware|rat\b|keylogger|spyware|trojan|rootkit|backdoor|virus|ransomware)\s+(on|in|onto|into)\b", "Malware Deployment", 0.85),
+    (r"\bremotely\s+access\s+(\w[\w']*\s+){0,3}(computer|device|phone|system|server)\s+without\b", "Unauthorized Access", 0.82),
+
+    # ── DOXING / FINDING PERSONAL INFO ───────────────────────────────
+    (r"\bhow\s+to\s+find\s+someone('s)?\s+(personal\s+information|home\s+address|address|phone\s+number|private\s+info|location|identity|details)\b", "Doxing / PII Harvesting", 0.80),
+    (r"\bfind\s+(\w[\w']*\s+){0,3}(personal\s+information|home\s+address|phone\s+number|private\s+info)\s+(of|for|about)\s+(someone|a\s+person|anyone)\b", "Doxing / PII Harvesting", 0.80),
+
+    # ── STRAIGHTFORWARD HACK/BREAK-IN REQUESTS (Gap-fill v2.6) ─────────
+    # "break into" as synonym for "hack into" — requires explicit digital target
+    (r"\bbreak\s+into\s+(\w+\s+)?(a\s+|the\s+|any\s+|their\s+|your\s+|my\s+|our\s+)?(websites?|servers?|databases?|accounts?|systems?|networks?|platforms?|portals?|infrastructure|facebook|instagram|twitter|gmail|google|snapchat|tiktok|linkedin|discord|whatsapp|icloud|apple|microsoft|amazon)\b", "Unauthorized Access", 0.80),
+    # "teach/show me how to hack <digital target>"
+    (r"\b(teach|show|explain|help)\s+(me\s+|us\s+)?how\s+to\s+(hack|break\s+into|crack|compromise)\s+(into\s+)?(\w+\s+)?(websites?|servers?|databases?|accounts?|systems?|networks?|platforms?|portals?|infrastructure|facebook|instagram|twitter|gmail|google|snapchat|tiktok|linkedin|discord|whatsapp|icloud)\b", "Unauthorized Access Intent", 0.80),
+    # "guide/tutorial to hacking <digital target>"
+    (r"\b(guide|tutorial|instructions?|steps?|walkthrough)\s+(to|for|on)\s+(hacking|breaking\s+into|cracking|compromising)\s+(\w+\s+)?(websites?|servers?|databases?|accounts?|systems?|networks?|platforms?|portals?|infrastructure|facebook|instagram|twitter|gmail)\b", "Unauthorized Access Intent", 0.78),
+    # Possessive apostrophe targets: "hack someone's account", "hack their boss's email"
+    (r"\bhack\s+(into\s+)?\w+'s?\s+(account|system|email|server|database|device|phone|computer)\b", "Unauthorized Access", 0.80),
+    # Named social/tech platforms: "hack into Facebook", "hack Gmail"
+    (r"\bhack\s+(into\s+)?(\w+\s+)?(facebook|instagram|twitter|gmail|google|snapchat|tiktok|linkedin|discord|whatsapp|icloud|apple|microsoft|amazon|netflix|spotify)\b", "Unauthorized Access", 0.82),
     # Passive/curiosity phrasing — "how do people hack WiFi", "how do scammers get OTPs"
     (r"\bhow\s+do\s+(people|hackers?|scammers?|attackers?|someone|they|you)\s+(usually\s+|typically\s+|actually\s+|easily\s+)?(hack|crack|break\s+into|steal|bypass|intercept|get|obtain|access)\b", "Passive Attack Inquiry", 0.72),
     (r"\bhow\s+(do|does|can|could|would)\s+(someone|a\s+hacker|an\s+attacker|scammers?|people)\s+(hack|crack|break|steal|bypass|intercept|phish|exploit|compromise)\b", "Passive Attack Inquiry", 0.72),
