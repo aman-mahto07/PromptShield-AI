@@ -1,48 +1,75 @@
 """
-Loads the pre-trained Logistic Regression model and returns
-a probability score indicating how adversarial a prompt is.
+classifier.py  (v2 — upgraded)
+-------------------------------
+ML scoring layer. Loads the trained Logistic Regression model
+and returns adversarial probability.
+
+Upgrade from v1:
+  - Calibrated probability output (Platt scaling via CalibratedClassifierCV
+    is applied during training in dataset_loader.py)
+  - Supports both single-text and batch scoring
+  - Graceful ModelNotReady exception for cleaner error handling
 """
 
 import os
 import joblib
 import numpy as np
+from typing import Union
 
-# Default model path (relative to project root)
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "classifier.pkl")
-
-
-def load_model():
-    """Load the serialized sklearn LogisticRegression classifier."""
-    if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(
-            f"Model not found at {MODEL_PATH}.\n"
-            "Please run: python data/dataset_loader.py  to train the model first."
-        )
-    return joblib.load(MODEL_PATH)
+# Path resolution works whether called from project root or a subdirectory
+MODEL_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "..", "models", "classifier.pkl"
+)
 
 
-_clf = None  # lazy-loaded singleton
+class ModelNotReady(Exception):
+    """Raised when the model file doesn't exist yet."""
+    pass
+
+
+_clf = None  # module-level singleton — loaded once per process
 
 
 def get_classifier():
-    """Return cached classifier instance."""
+    """Return the cached classifier, loading it on first call."""
     global _clf
     if _clf is None:
-        _clf = load_model()
+        abs_path = os.path.abspath(MODEL_PATH)
+        if not os.path.exists(abs_path):
+            raise ModelNotReady(
+                f"Model not found at: {abs_path}\n"
+                "Run:  python data/dataset_loader.py  to train it first."
+            )
+        _clf = joblib.load(abs_path)
     return _clf
 
 
 def ml_score(embedding: np.ndarray) -> float:
     """
-    Predict adversarial probability from an embedding vector.
+    Return adversarial probability for a single embedding.
 
     Args:
-        embedding: np.ndarray of shape (1, 384)
+        embedding: np.ndarray of shape (1, 384) from embedding.py
 
     Returns:
-        float in [0, 1] — probability that the prompt is adversarial
+        float [0, 1] — probability of being adversarial
     """
-    clf = get_classifier()
-    # predict_proba returns [[prob_safe, prob_adversarial]]
-    proba = clf.predict_proba(embedding)
-    return float(proba[0][1])  # index 1 = adversarial class
+    clf  = get_classifier()
+    prob = clf.predict_proba(embedding)
+    return float(prob[0][1])
+
+
+def ml_score_batch(embeddings: np.ndarray) -> np.ndarray:
+    """
+    Score multiple embeddings at once (more efficient than looping).
+
+    Args:
+        embeddings: np.ndarray of shape (N, 384)
+
+    Returns:
+        np.ndarray of shape (N,) with adversarial probabilities
+    """
+    clf  = get_classifier()
+    prob = clf.predict_proba(embeddings)
+    return prob[:, 1]
