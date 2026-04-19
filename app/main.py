@@ -593,8 +593,6 @@ st.markdown(f"""
 # ─────────────────────────────────────────────────────────────────────
 
 def run_pipeline(text: str, settings: dict) -> dict:
-    from src.fusion import FusionResult
-
     prep    = preprocess(text)
     obf_s   = obfuscation_score(prep)
 
