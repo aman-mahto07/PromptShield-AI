@@ -49,7 +49,13 @@ W_ML          = 0.30   # logistic regression output
 W_RULE        = 0.30   # rule engine score
 W_ANOMALY     = 0.20   # semantic anomaly score
 W_OBFUSCATION = 0.15   # preprocessing obfuscation score
-W_CRITICAL    = 0.05   # bonus for triggering any critical flag
+W_CRITICAL    = 0.10   # bonus for triggering any critical flag (was 0.05)
+
+# When ML + anomaly are both 0.0 (model not running / cold start),
+# redistribute their combined weight (0.50) to the rule engine so a
+# high-confidence rule signal isn't diluted to ~0.23 and incorrectly
+# classified as SAFE.  Obfuscation keeps its weight either way.
+W_RULE_FALLBACK = 0.75   # rule weight used when ml_score == anomaly_score == 0.0
 
 # Veto: any single signal above this → instant ADVERSARIAL
 VETO_THRESHOLD = 0.88
@@ -75,6 +81,27 @@ CRITICAL_FLAGS = {
     "Targeted Vulnerability Recon",
     "Attack Methodology Request",
     "Auth Bypass Request",
+    # System / data intrusion — clear unauthorized access intent
+    "Unauthorized System Access",
+    "Internal System Access",
+    "System Destruction Request",
+    "Internal Data Exfiltration",
+    "Mass Data Extraction",
+    "Privilege Escalation Request",
+    "Privilege Escalation Mode",
+    "Circumvention Content Request",
+    # Chemical / physical harm
+    "Chemical Weapon Synthesis",
+    "Household Chemical Weapon",
+    "Poison/Bioweapon Synthesis",
+    "Narrative WMD Wrap",
+    "Physical Harm Evasion",
+    "Detailed Harm Guide",
+    # Credential / session attacks
+    "Credential Hash Dumping",
+    "Credential Attack Tool",
+    "Personal Account Hacking",
+    "Session Token Theft",
 }
 
 # Soft flags — suspicious alone, adversarial when combined
@@ -210,6 +237,15 @@ def fuse(
                 veto_reason      = f"{source} score ({score:.3f}) exceeded veto threshold ({VETO_THRESHOLD})",
             )
 
+    # ── ADAPTIVE RULE WEIGHT ──────────────────────────────────────────
+    # When ML and anomaly signals are absent (model not loaded / cold start),
+    # use W_RULE_FALLBACK so the rule engine isn't diluted by zero-value signals.
+    effective_w_rule = (
+        W_RULE_FALLBACK
+        if ml_score == 0.0 and anomaly_score == 0.0
+        else W_RULE
+    )
+
     # ── CRITICAL FLAG BONUS ───────────────────────────────────────────
     # If a critical flag was triggered, add a fixed bonus to ensure
     # single-signal critical attacks still cross the threshold
@@ -224,7 +260,7 @@ def fuse(
     # ── WEIGHTED COMBINATION ──────────────────────────────────────────
     weighted_sum = (
         W_ML          * ml_score          +
-        W_RULE        * rule_score        +
+        effective_w_rule * rule_score     +
         W_ANOMALY     * anomaly_score     +
         W_OBFUSCATION * obfuscation_score +
         critical_bonus                    +

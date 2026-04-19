@@ -311,6 +311,21 @@ def _normalize_leet(text: str, flags: list, applied: list) -> str:
 # STEP 5: Remove excessive punctuation noise
 # ══════════════════════════════════════════════════════════════════════
 
+def _strip_accents(text: str, applied: list) -> str:
+    """
+    Decompose accented characters to their ASCII base via NFKD, then
+    strip combining diacritical marks.  This lets foreign-language
+    override patterns match whether the attacker typed accents or not.
+
+    e.g. "précédentes" → "precedentes", "répondez" → "repondez"
+         "instrucciones" stays "instrucciones" (already ASCII)
+    """
+    nfkd = unicodedata.normalize("NFKD", text)
+    stripped = "".join(c for c in nfkd if not unicodedata.combining(c))
+    if stripped != text:
+        applied.append("stripped_diacritics")
+    return stripped
+
 def _clean_punctuation_noise(text: str, applied: list) -> str:
     """
     Remove repeated punctuation and special chars used as noise.
@@ -386,6 +401,11 @@ def preprocess(raw_text: str) -> PreprocessResult:
 
     # ── Step 4: Leet normalization ─────────────────
     text = _normalize_leet(text, flags, applied)
+
+    # ── Step 4b: Strip diacritics ──────────────────
+    # é→e, è→e, ñ→n, etc. so foreign-language rule
+    # patterns match accented and unaccented input.
+    text = _strip_accents(text, applied)
 
     # ── Step 5: Punctuation noise removal ─────────
     text = _clean_punctuation_noise(text, applied)
