@@ -1,4 +1,8 @@
 """
+main.py  (v2.2 — redesigned UI)
+--------------------------------
+PromptShield AI — Streamlit Frontend
+
 Full pipeline:
   1. Preprocessing  → normalization, obfuscation, decoding
   2. Rule Engine    → patterns on cleaned + decoded text
